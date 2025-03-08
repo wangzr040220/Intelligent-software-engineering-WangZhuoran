@@ -1,0 +1,43 @@
+问题1：是否符合作业要求，帮我看看两个代码
+基准方法：随机抽样
+优化方法：以 "针对性修改敏感属性值" 和 "基于预测概率选择样本" 为核心方法。
+Question 1: Do you meet the requirements of the assignment? Help me look at two codes
+Baseline method: Random sampling
+Optimization method: The core method is to modify sensitive attribute values and select samples based on prediction probability.
+
+问题2：报告要咋写，然后我这个是不是旧的方法，是不是要说原理
+Question 2: HOW TO WRITE the report, and then I this is not the old method, is not to say the principle
+Solution: You can articulate the proposed solution here. While we encourage you to think about
+your own idea, it is also fine if you want to re-implement an approach from existing work and see if
+it works for the systems/projects considered1. However, you need to discuss the designs in detail,
+including any rationales behind them, using your own words. You are welcome to design a GUI
+for it, but the most important part is the core algorithm that addresses the problem of intelligent
+software engineering.
+
+问题3：数据差异会不会太大，是不是代码有问题
+====================================================================================================
+数据集             歧视率        变化样本数        总样本数       敏感属性
+----------------------------------------------------------------------------------------------------
+adult             32.20%          161        500 gender, race, age
+compas             9.00%           45        500 Sex, Race
+law_school         1.60%            8        500 male, race
+kdd               43.20%          216        500 sex, race
+dutch             58.62%          102        174 sex, age
+credit            14.00%           70        500 SEX, EDUCATION, MARRIAGE
+communities_crime    0.00%            0        500 Black, femalePctDiv
+german            15.69%           40        255 PersonStatusSex, AgeInYears
+====================================================================================================
+
+Final results summary:
+====================================================================================================
+Dataset         Discrimination Rate Changed Samples Total Samples Sensitive Attributes
+----------------------------------------------------------------------------------------------------
+adult             17.00%           85        500 gender, race, age
+compas             1.00%            5        500 Sex, Race
+law_school         0.00%            0        500 male, race
+kdd                5.40%           27        500 sex, race
+dutch              0.40%            2        500 sex, age
+credit             4.40%           22        500 SEX, EDUCATION, MARRIAGE
+communities_crime    0.00%            0        500 Black, femalePctDiv
+german             8.00%           40        500 PersonStatusSex, AgeInYears
+====================================================================================================
