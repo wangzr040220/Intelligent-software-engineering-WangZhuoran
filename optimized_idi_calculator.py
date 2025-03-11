@@ -4,19 +4,19 @@ from keras.models import load_model
 from tqdm import tqdm
 
 def load_dataset(dataset_name):
-    """加载数据集"""
-    print(f"\n加载数据集: {dataset_name}")
+    """Load dataset"""
+    print(f"\nLoading dataset: {dataset_name}")
     if dataset_name == 'credit':
         return pd.read_csv('lab4data/dataset/processed_credit_with_numerical.csv')
     return pd.read_csv(f'lab4data/dataset/processed_{dataset_name}.csv')
 
 def load_dnn_model(dataset_name):
-    """加载对应的DNN模型"""
-    print(f"加载模型: model_processed_{dataset_name}.h5")
+    """Load corresponding DNN model"""
+    print(f"Loading model: model_processed_{dataset_name}.h5")
     return load_model(f'lab4data/DNN/model_processed_{dataset_name}.h5')
 
 def get_sensitive_attributes(dataset_name):
-    """获取数据集的敏感属性"""
+    """Get sensitive attributes of the dataset"""
     sensitive_attrs = {
         'adult': ['gender', 'race', 'age'],
         'compas': ['Sex', 'Race'],
@@ -30,7 +30,7 @@ def get_sensitive_attributes(dataset_name):
     return sensitive_attrs.get(dataset_name.lower(), [])
 
 def get_target_label(dataset_name):
-    """获取数据集的目标标签"""
+    """Get target label of the dataset"""
     target_labels = {
         'adult': 'Class-label',
         'compas': 'Recidivism',
@@ -44,8 +44,8 @@ def get_target_label(dataset_name):
     return target_labels.get(dataset_name.lower())
 
 def modify_continuous_attribute(df, attr, original_value, strategy='quantile'):
-    """针对连续型属性的修改策略，确保修改后的值与原值不同"""
-    max_attempts = 10  # 最大尝试次数
+    """Modification strategy for continuous attributes, ensuring the modified value differs from the original"""
+    max_attempts = 10  # Maximum number of attempts
     attempts = 0
     
     while attempts < max_attempts:
@@ -58,45 +58,45 @@ def modify_continuous_attribute(df, attr, original_value, strategy='quantile'):
             else:
                 new_value = df[attr].max()
         
-        # 检查新值是否与原值不同（考虑浮点数精度）
+        # Check if the new value differs from the original (considering floating-point precision)
         if not np.isclose(new_value, original_value, rtol=1e-05, atol=1e-08):
             return new_value
         attempts += 1
     
-    # 如果多次尝试都未能找到不同的值，则返回最远的值
+    # If multiple attempts fail to find a different value, return the furthest value
     all_values = df[attr].unique()
     distances = np.abs(all_values - original_value)
     return all_values[np.argmax(distances)]
 
 def modify_discrete_attribute(df, attr, original_value):
-    """针对离散型属性的修改策略，确保修改后的值与原值不同"""
+    """Modification strategy for discrete attributes, ensuring the modified value differs from the original"""
     possible_values = df[attr].unique()
     
-    # 如果只有一个可能的值，无法修改
+    # If there is only one possible value, cannot modify
     if len(possible_values) <= 1:
         return original_value
         
-    # 移除原始值
+    # Remove the original value
     other_values = possible_values[possible_values != original_value]
     
-    # 如果没有其他可选值，返回原值
+    # If there are no other options, return the original value
     if len(other_values) == 0:
         return original_value
         
-    # 随机选择一个不同的值
+    # Randomly choose a different value
     return np.random.choice(other_values)
 
 def get_prediction_probability(model, sample):
-    """获取模型预测概率，确保结果在[0,1]范围内"""
+    """Get model prediction probability, ensuring the result is within [0,1]"""
     prob = model.predict(sample.reshape(1, -1), verbose=0)[0][0]
-    # 确保预测概率在[0,1]范围内
+    # Ensure prediction probability is within [0,1]
     return np.clip(prob, 0, 1)
 
 def is_prediction_changed(original_prob, modified_prob, threshold=0.5):
-    """判断预测是否发生变化，包含预测概率的有效性检查"""
-    # 确保预测概率在有效范围内
+    """Determine if the prediction has changed, including validity check of prediction probabilities"""
+    # Ensure prediction probabilities are within valid range
     if not (0 <= original_prob <= 1 and 0 <= modified_prob <= 1):
-        print(f"警告：检测到无效的预测概率值 - 原始值: {original_prob}, 修改后: {modified_prob}")
+        print(f"Warning: Detected invalid prediction probability values - Original: {original_prob}, Modified: {modified_prob}")
         return False
     
     original_label = 1 if original_prob >= threshold else 0
@@ -104,47 +104,47 @@ def is_prediction_changed(original_prob, modified_prob, threshold=0.5):
     return original_label != modified_label
 
 def calculate_optimized_discrimination_rate(dataset_name, target_samples=500):
-    """计算优化后的歧视率"""
+    """Calculate optimized discrimination rate"""
     try:
-        # 加载数据集和模型
+        # Load dataset and model
         df = load_dataset(dataset_name)
         model = load_dnn_model(dataset_name)
         
-        # 获取敏感属性和目标标签
+        # Get sensitive attributes and target label
         sensitive_attrs = get_sensitive_attributes(dataset_name)
         
-        # 将列名转换为小写
+        # Convert column names to lowercase
         df.columns = df.columns.str.lower()
         sensitive_attrs = [attr.lower() for attr in sensitive_attrs]
         
-        # 将目标标签转为小写，确保与列名匹配
+        # Convert target label to lowercase to ensure it matches the column name
         target_label = get_target_label(dataset_name).lower()
         
-        print(f"处理数据集: {dataset_name}")
-        print(f"敏感属性: {', '.join(sensitive_attrs)}")
+        print(f"Processing dataset: {dataset_name}")
+        print(f"Sensitive attributes: {', '.join(sensitive_attrs)}")
         
         changes_count = 0
         samples_processed = 0
-        invalid_predictions = 0  # 记录无效预测的数量
+        invalid_predictions = 0  # Record the number of invalid predictions
         
-        # 预处理：计算所有样本的预测概率
+        # Preprocessing: Calculate prediction probabilities for all samples
         X = df.drop(target_label, axis=1)
         probabilities = model.predict(X, verbose=0).flatten()
-        probabilities = np.clip(probabilities, 0, 1)  # 确保所有概率值在[0,1]范围内
+        probabilities = np.clip(probabilities, 0, 1)  # Ensure all probability values are within [0,1]
         
-        # 选择预测概率在指定范围内的样本
+        # Select samples with prediction probabilities within the specified range
         prob_mask_tight = (probabilities >= 0.4) & (probabilities <= 0.6)
         candidate_indices = np.where(prob_mask_tight)[0]
         
-        # 如果样本不够，扩大范围
+        # If samples are insufficient, expand the range
         if len(candidate_indices) < target_samples:
             prob_mask_wide = (probabilities >= 0.3) & (probabilities <= 0.7)
             candidate_indices = np.where(prob_mask_wide)[0]
         
-        # 确保有足够的样本
+        # Ensure there are enough samples
         num_samples = min(len(candidate_indices), target_samples)
         
-        progress_bar = tqdm(total=num_samples, desc="计算预测变化")
+        progress_bar = tqdm(total=num_samples, desc="Calculating prediction changes")
         modified_samples_list = []
         original_probs_list = []
         candidate_selected = np.random.choice(candidate_indices, num_samples, replace=False)
@@ -155,7 +155,7 @@ def calculate_optimized_discrimination_rate(dataset_name, target_samples=500):
             for attr in sensitive_attrs:
                 current_value = modified_sample[attr]
                 if df[attr].dtype in ['int64', 'float64']:
-                    # 随机选择极值修改或分位数修改策略
+                    # Randomly choose between extreme modification or quantile modification strategy
                     strategy = np.random.choice(['quantile', 'extreme'])
                     modified_sample[attr] = modify_continuous_attribute(df, attr, current_value, strategy=strategy)
                 else:
@@ -175,46 +175,46 @@ def calculate_optimized_discrimination_rate(dataset_name, target_samples=500):
         changes_count = int((original_labels != modified_labels).sum())
         samples_processed = num_samples
         
-        # 打印无效预测的统计信息
+        # Print statistics of invalid predictions
         if invalid_predictions > 0:
-            print(f"\n警告：检测到 {invalid_predictions} 个无效的预测结果")
+            print(f"\nWarning: Detected {invalid_predictions} invalid prediction results")
         
-        # 计算歧视率
+        # Calculate discrimination rate
         discrimination_rate = changes_count / samples_processed
         return discrimination_rate, changes_count, samples_processed
     
     except Exception as e:
-        print(f"错误: {str(e)}")
+        print(f"Error: {str(e)}")
         return None, None, None
 
 def main():
-    # 使用多个随机种子，减小误差
+    # Use multiple random seeds to reduce error
     seeds = [42, 2023, 10086, 888, 999]
     
-    # 测试所有数据集
+    # Test all datasets
     datasets = ['adult', 'compas', 'law_school', 'kdd', 'dutch', 
                'credit', 'communities_crime', 'german']
     
-    # 用于存储每个随机种子的结果
+    # Store results for each random seed
     all_results = {}
     
-    # 用于存储平均结果
+    # Store average results
     avg_results = []
     
-    # 用于存储每个随机种子的表格输出
+    # Store table output for each random seed
     seed_tables = {}
     
-    # 对每个随机种子进行一次完整实验
+    # Conduct a complete experiment for each random seed
     for seed in seeds:
-        print(f"\n\n{'#'*30} 使用随机种子: {seed} {'#'*30}")
+        print(f"\n\n{'#'*30} Using random seed: {seed} {'#'*30}")
         
-        # 设置随机种子
+        # Set random seed
         np.random.seed(seed)
         
         results = []
         
         for dataset in datasets:
-            print(f"\n{'='*20} 处理数据集: {dataset} {'='*20}")
+            print(f"\n{'='*20} Processing dataset: {dataset} {'='*20}")
             discrimination_rate, changes_count, total_samples = calculate_optimized_discrimination_rate(dataset)
             sensitive_attrs = get_sensitive_attributes(dataset)
             results.append({
@@ -225,26 +225,26 @@ def main():
                 'sensitive_attrs': sensitive_attrs
             })
         
-        # 为当前随机种子存储结果
+        # Store results for the current random seed
         all_results[seed] = results
         
-        # 生成结果表格但不立即显示
+        # Generate result table but do not display immediately
         table_lines = []
-        table_lines.append(f"\n\n随机种子 {seed} 的优化结果汇总：")
+        table_lines.append(f"\n\nSummary of optimized results for random seed {seed}:")
         table_lines.append("=" * 100)
-        table_lines.append(f"{'数据集':<15} {'歧视率':<10} {'变化样本数':<12} {'总样本数':<10} {'敏感属性'}")
+        table_lines.append(f"{'Dataset':<15} {'Discrimination Rate':<10} {'Changed Samples':<12} {'Total Samples':<10} {'Sensitive Attributes'}")
         table_lines.append("-" * 100)
         
         for result in results:
             if result['discrimination_rate'] is not None:
                 table_lines.append(f"{result['dataset']:<15} {result['discrimination_rate']:>8.2%} {result['changes_count']:>12} {result['total_samples']:>10} {', '.join(result['sensitive_attrs'])}")
             else:
-                table_lines.append(f"{result['dataset']:<15} {'计算失败':<10} {'N/A':<12} {'N/A':<10} {', '.join(result['sensitive_attrs'])}")
+                table_lines.append(f"{result['dataset']:<15} {'Calculation Failed':<10} {'N/A':<12} {'N/A':<10} {', '.join(result['sensitive_attrs'])}")
         
         table_lines.append("=" * 100)
         seed_tables[seed] = table_lines
     
-    # 计算平均结果
+    # Calculate average results
     for dataset in datasets:
         valid_rates = []
         valid_changes = []
@@ -280,36 +280,36 @@ def main():
                 'sensitive_attrs': sensitive_attrs if sensitive_attrs else get_sensitive_attributes(dataset)
             })
     
-    # 在所有测试完成后一起显示结果表格
-    print("\n\n" + "="*40 + " 所有优化测试结果 " + "="*40)
+    # Display result tables after all tests are completed
+    print("\n\n" + "="*40 + " All Optimized Test Results " + "="*40)
     
-    # 显示每个随机种子的结果表格
+    # Display result table for each random seed
     for seed in seeds:
         for line in seed_tables[seed]:
             print(line)
         print("\n")
     
-    # 显示平均结果表格
-    print("\n\n多随机种子平均优化结果汇总：")
+    # Display average result table
+    print("\n\nSummary of average optimized results for multiple random seeds:")
     print("=" * 100)
-    print(f"{'数据集':<15} {'平均歧视率':<10} {'平均变化样本数':<15} {'平均总样本数':<10} {'敏感属性'}")
+    print(f"{'Dataset':<15} {'Average Discrimination Rate':<10} {'Average Changed Samples':<15} {'Average Total Samples':<10} {'Sensitive Attributes'}")
     print("-" * 100)
     
     for result in avg_results:
         if result['discrimination_rate'] is not None:
             print(f"{result['dataset']:<15} {result['discrimination_rate']:>8.2%} {result['changes_count']:>15} {result['total_samples']:>12} {', '.join(result['sensitive_attrs'])}")
         else:
-            print(f"{result['dataset']:<15} {'计算失败':<10} {'N/A':<15} {'N/A':<12} {', '.join(result['sensitive_attrs'])}")
+            print(f"{result['dataset']:<15} {'Calculation Failed':<10} {'N/A':<15} {'N/A':<12} {', '.join(result['sensitive_attrs'])}")
     
     print("=" * 100)
-    print("\n注：")
-    print("1. 优化后的歧视率基于以下改进：")
-    print("   - 选择预测概率在[0.4,0.6]范围内的样本（如不够则扩展到[0.3,0.7]）")
-    print("   - 对连续型敏感属性使用分位数或极值修改策略")
-    print("   - 每个数据集使用最多500个精选样本")
-    print("2. 预测标签发生变化表示模型对同一样本在修改敏感属性后的预测结果发生了改变")
-    print("3. 歧视率越高，表示模型对敏感属性的依赖程度越高，公平性越差")
-    print(f"4. 上述结果是基于 {len(seeds)} 个随机种子 ({', '.join(map(str, seeds))}) 的平均值")
+    print("\nNote:")
+    print("1. The optimized discrimination rate is based on the following improvements:")
+    print("   - Select samples with prediction probabilities in the range [0.4,0.6] (expand to [0.3,0.7] if insufficient)")
+    print("   - Use quantile or extreme modification strategy for continuous sensitive attributes")
+    print("   - Use up to 500 selected samples per dataset")
+    print("2. A change in prediction label indicates that the model's prediction result for the same sample changed after modifying sensitive attributes")
+    print("3. The higher the discrimination rate, the more the model depends on sensitive attributes, indicating poorer fairness")
+    print(f"4. The above results are averages based on {len(seeds)} random seeds ({', '.join(map(str, seeds))})")
 
 if __name__ == "__main__":
     main() 
